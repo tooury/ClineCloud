@@ -1056,6 +1056,14 @@ func (m *Manager) GetState() *types.ConversationState {
 	return m.state
 }
 
+// GetClient returns the underlying ClineClient for direct gRPC calls
+// This allows other packages to access gRPC services without adding wrapper methods to Manager
+func (m *Manager) GetClient() *client.ClineClient {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+	return m.client
+}
+
 // Cleanup cleans up resources
 func (m *Manager) Cleanup() {
 	// Clean up streaming display resources if needed
