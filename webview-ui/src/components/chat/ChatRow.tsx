@@ -266,7 +266,8 @@ export const ChatRowContent = memo(
 				: undefined
 
 		const isCommandMessage = message.ask === "command" || message.say === "command"
-		const isCommandExecuting = isCommandMessage && backgroundCommandRunning && isLast
+		// Simplified: A command is executing if it's a command message that hasn't completed yet and is the last message
+		const isCommandExecuting = isCommandMessage && isLast && !message.commandCompleted
 		const isCommandCompleted = isCommandMessage && message.commandCompleted === true
 
 		const isMcpServerResponding = isLast && lastModifiedMessage?.say === "mcp_server_request_started"
