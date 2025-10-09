@@ -922,7 +922,7 @@ export const ChatRowContent = memo(
 						style={{
 							borderRadius: 6,
 							border: "1px solid var(--vscode-editorGroup-border)",
-							overflow: "hidden",
+							overflow: "visible",
 							backgroundColor: CODE_BLOCK_BG_COLOR,
 							transition: "all 0.3s ease-in-out",
 						}}>
