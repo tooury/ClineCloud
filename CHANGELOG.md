@@ -2,8 +2,6 @@
 
 ## 3.32.8
 
-### Patch Changes
-
 - 835204c: Added updateApiConfigurationPartial with FieldMask to allow for partial ApiProvider updates
 
 ## [3.32.7]
