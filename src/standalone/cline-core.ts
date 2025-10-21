@@ -11,10 +11,12 @@ import { HostProvider } from "@/hosts/host-provider"
 import { DiffViewProvider } from "@/integrations/editor/DiffViewProvider"
 import { HOSTBRIDGE_PORT, waitForHostBridgeReady } from "./hostbridge-client"
 import { PROTOBUS_PORT, startProtobusService } from "./protobus-service"
+import { RemoteAccessServer } from "./remote-access"
 import { log } from "./utils"
 import { initializeContext } from "./vscode-context"
 
 let globalLockManager: SqliteLockManager | undefined
+let globalRemoteAccessServer: RemoteAccessServer | undefined
 
 async function main() {
 	log("\n\n\nStarting cline-core service...\n\n\n")
@@ -62,6 +64,22 @@ async function main() {
 
 		// Now this will throw instead of exit if binding fails
 		const protobusAddress = await startProtobusService(webviewProvider.controller)
+
+		// Start Remote Access Server (WebSocket for remote clients)
+		log("\n\n\nStarting Remote Access Server...\n\n\n")
+		globalRemoteAccessServer = new RemoteAccessServer(webviewProvider.controller, {
+			port: parseInt(process.env.REMOTE_ACCESS_PORT || "48812", 10),
+			jwtSecret: process.env.JWT_SECRET,
+			enableCors: process.env.NODE_ENV !== "production",
+		})
+
+		try {
+			const remoteAccessAddress = await globalRemoteAccessServer.start()
+			log(`Remote Access Server started: ${remoteAccessAddress}`)
+		} catch (error: any) {
+			log(`WARNING: Failed to start Remote Access Server: ${error.message}`)
+			log("Continuing without remote access functionality...")
+		}
 
 		// Initialize SQLite lock manager for instance registration
 		const dbPath = `${DATA_DIR}/locks.db`
@@ -181,7 +199,18 @@ async function requestHostBridgeShutdown(): Promise<void> {
  */
 async function shutdownGracefully(lockManager?: SqliteLockManager) {
 	try {
-		// Step 1: Tell the paired host bridge to shut down
+		// Step 1: Stop Remote Access Server
+		if (globalRemoteAccessServer) {
+			log("Stopping Remote Access Server...")
+			try {
+				await globalRemoteAccessServer.stop()
+				log("Remote Access Server stopped successfully")
+			} catch (error) {
+				log(`Warning: Failed to stop Remote Access Server: ${error}`)
+			}
+		}
+
+		// Step 2: Tell the paired host bridge to shut down
 		log("Requesting host bridge shutdown...")
 		if (HostProvider.isInitialized()) {
 			await requestHostBridgeShutdown()
@@ -189,7 +218,7 @@ async function shutdownGracefully(lockManager?: SqliteLockManager) {
 			log("Warning: HostProvider not initialized, cannot request shutdown")
 		}
 
-		// Step 2: Clean up lock manager entry
+		// Step 3: Clean up lock manager entry
 		log("Cleaning up lock manager entry...")
 		try {
 			lockManager?.unregisterInstance()
@@ -199,7 +228,7 @@ async function shutdownGracefully(lockManager?: SqliteLockManager) {
 			log(`Warning: Failed to clean up lock manager: ${error}`)
 		}
 
-		// Step 3: Tear down services
+		// Step 4: Tear down services
 		log("Tearing down services...")
 		try {
 			tearDown()
@@ -212,7 +241,7 @@ async function shutdownGracefully(lockManager?: SqliteLockManager) {
 	} catch (error) {
 		log(`Error during graceful shutdown: ${error}`)
 	} finally {
-		// Step 4: Exit the process
+		// Step 5: Exit the process
 		process.exit(0)
 	}
 }
@@ -266,8 +295,11 @@ Options:
   -h, --help                     Show this help message
 
 Environment Variables:
-  PROTOBUS_ADDRESS              Override the main service address (format: host:port)
+  PROTOBUS_ADDRESS               Override the main service address (format: host:port)
   HOST_BRIDGE_ADDRESS            Override the host bridge address (format: host:port)
+  REMOTE_ACCESS_PORT             Port for remote access WebSocket server (default: 48812)
+  JWT_SECRET                     Secret key for JWT token signing (REQUIRED for production)
+  NODE_ENV                       Set to 'production' to disable CORS wildcard
 `)
 }
 
