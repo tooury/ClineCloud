@@ -5,6 +5,7 @@ node_modules
 tmp
 .vscode-test/
 *.vsix
+*.tar.gz
 
 .DS_Store
 .idea
